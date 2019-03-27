@@ -20,8 +20,15 @@ class MileageLogger
         void getHomeDir();
         void getDateTime();
         void checkIfFileExists();
-        // void writeToFile();
+        void writeToFile();
         void egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg);
+        void swcStatusCb(const visteon_vehctrl_msgs::FsmStatus::ConstPtr& msg);
+
+        string test_location;
+        string functionality;
+        string software_version;
+        string test_driver;
+        string safety_observer;
 
         MileageLogger();
         ~MileageLogger();
@@ -29,7 +36,11 @@ class MileageLogger
     private:
         string path2store_logs;
         string date;
-        FILE *file;
+        string start_time;
+        string end_time;
+        float distance_driven;
+        string current_mode;
+        string previous_mode;
 };
 
 MileageLogger::MileageLogger(){};
@@ -76,6 +87,7 @@ void MileageLogger::checkIfFileExists()
     }
     path2store_logs = path2store_logs + date + ".csv";
     // check if file exists
+    FILE *file;
     if (fopen(path2store_logs.c_str(),"r") == NULL)
     {
         file=fopen(path2store_logs.c_str(), "w+");
@@ -89,16 +101,42 @@ void MileageLogger::checkIfFileExists()
     }
 }
 
-// void MileageLogger::writeToFile()
-// {
-//     ROS_INFO("Date is: [%s]", date);
-//     ROS_INFO("Path is: [%s]", path2store_logs);
-// }
+void MileageLogger::writeToFile()
+{
+    ROS_INFO("mode changed");
+    // ROS_INFO("Path is: [%s]", path2store_logs);
+}
 
 void MileageLogger::egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg)
 {
-    ROS_INFO("Date is: [%s]", date.c_str());
-    ROS_INFO("Path is: [%s]", path2store_logs.c_str());
+    // calculate distance travelled in kilometers
+    float distance = msg->longitudinalVelocity * 3.6 * (0.02 / 3600);
+    distance_driven = distance_driven + distance;
+    if (previous_mode != current_mode)
+    {
+        writeToFile();
+        previous_mode = current_mode;
+    }
+    else{
+        ROS_INFO("same mode");
+    }
+    
+    // ROS_INFO("Path is: [%s]", path2store_logs.c_str());
+}
+
+void MileageLogger::swcStatusCb(const visteon_vehctrl_msgs::FsmStatus::ConstPtr& msg)
+{
+    if(msg->fsm_DrivingModeStatus == 1)
+    {
+        current_mode = "open loop"; 
+    }
+    else if(msg->fsm_DrivingModeStatus == 2 | 
+            msg->fsm_DrivingModeStatus == 3 | 
+            msg->fsm_DrivingModeStatus == 4 | 
+            msg->fsm_DrivingModeStatus == 5)
+    {
+        current_mode = "closed loop";
+    }
 }
 
 int main(int argc, char ** argv)
@@ -106,8 +144,18 @@ int main(int argc, char ** argv)
     ros::init(argc, argv, "mileage_logger_node");
     ros::NodeHandle n;
     MileageLogger ml;
+    
+    // get parameters
+    n.param<string>("/sy/mileage_logger_node/test_location", ml.test_location, "Integration Tests");
+    n.param<string>("/sy/mileage_logger_node/functionality", ml.functionality, "Integration Tests");
+    n.param<string>("/sy/mileage_logger_node/software_version", ml.software_version, "55");
+    n.param<string>("/sy/mileage_logger_node/test_driver", ml.test_driver, "James");
+    n.param<string>("/sy/mileage_logger_node/safety_observer", ml.safety_observer, "Bond");
+    
+    // begin logging
     ml.start();
     ros::Subscriber ego_motion_sub = n.subscribe("/pc/fusion/egomotion",1,&MileageLogger::egoMotionCb, &ml);
+    ros::Subscriber swc_status_sub = n.subscribe("/ex/fsm/swc_status",1,&MileageLogger::swcStatusCb, &ml);
     ros::spin();
     return 0;
 }
