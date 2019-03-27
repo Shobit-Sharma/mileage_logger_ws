@@ -27,8 +27,8 @@ class MileageLogger
         ~MileageLogger();
 
     private:
-        char *path2store_logs = NULL;
-        char *date = NULL;
+        string path2store_logs;
+        string date;
         FILE *file;
 };
 
@@ -45,7 +45,8 @@ void MileageLogger::start()
 void MileageLogger::getHomeDir()
 {
     path2store_logs = getenv("HOME");
-    if (path2store_logs == NULL)
+    // if (path2store_logs == NULL)
+    if (path2store_logs == "")
     {
         path2store_logs = getpwuid(getuid())->pw_dir;
     }
@@ -66,24 +67,22 @@ void MileageLogger::getDateTime()
 
 void MileageLogger::checkIfFileExists()
 {
-    // cout << "date from here: " << date << endl;
-    strcat(path2store_logs, "/mileage_logs/");
+    path2store_logs = path2store_logs + "/mileage_logs/";
     // check if folder exists
     if (!boost::filesystem::exists(path2store_logs))
     {
         boost::filesystem::create_directories(path2store_logs);
-        ROS_INFO("Created directory: [%s]", path2store_logs);
+        ROS_INFO("Created directory: [%s]", path2store_logs.c_str());
     }
-    strcat(path2store_logs, date);
-    strcat(path2store_logs, ".csv");
+    path2store_logs = path2store_logs + date + ".csv";
     // check if file exists
-    if (fopen(path2store_logs,"r") == NULL)
+    if (fopen(path2store_logs.c_str(),"r") == NULL)
     {
-        file=fopen(path2store_logs, "w+");
-        ROS_INFO("Created file: [%s]", path2store_logs);
+        file=fopen(path2store_logs.c_str(), "w+");
+        ROS_INFO("Created file: [%s]", path2store_logs.c_str());
         fclose(file);
         std::ofstream myfile;
-        myfile.open(path2store_logs);
+        myfile.open(path2store_logs.c_str());
         // write csv headers
         myfile << "Date,Start Time,End Time, Test Location,Functionality Tested,Software Version,Kilometers Driven,Test Driven,Safety Observer,Mode\n";
         myfile.close();
@@ -98,9 +97,8 @@ void MileageLogger::checkIfFileExists()
 
 void MileageLogger::egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg)
 {
-    // ROS_INFO("Date is: [%s]", date);
-    ROS_INFO("Path is: [%s]", path2store_logs);
-    // cout << "date is: " << date << endl;
+    ROS_INFO("Date is: [%s]", date.c_str());
+    ROS_INFO("Path is: [%s]", path2store_logs.c_str());
 }
 
 int main(int argc, char ** argv)
