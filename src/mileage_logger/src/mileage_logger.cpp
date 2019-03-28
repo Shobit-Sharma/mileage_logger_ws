@@ -18,9 +18,9 @@ class MileageLogger
     public:
         void start();
         void getHomeDir();
-        void getDateTime();
+        void getDateTime(string mode);
         void checkIfFileExists();
-        void writeToFile();
+        void writeToFile(string edit_mode);
         void egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg);
         void swcStatusCb(const visteon_vehctrl_msgs::FsmStatus::ConstPtr& msg);
 
@@ -48,31 +48,48 @@ MileageLogger::~MileageLogger(){};
 
 void MileageLogger::start()
 {
+    // system always boots up in open loop
+    current_mode = "open loop";
+    previous_mode = "open loop";
     getHomeDir();
-    getDateTime();
+    getDateTime("start");
     checkIfFileExists();
 }
 
 void MileageLogger::getHomeDir()
 {
-    path2store_logs = getenv("HOME");
-    // if (path2store_logs == NULL)
-    if (path2store_logs == "")
-    {
-        path2store_logs = getpwuid(getuid())->pw_dir;
-    }
+    // to-do: getenv not working with a system service, to be debugged.
+    // path2store_logs = getenv("HOME");
+    // if (path2store_logs == "")
+    // {
+    path2store_logs = getpwuid(getuid())->pw_dir;
+    // }
 }
 
-void MileageLogger::getDateTime()
+void MileageLogger::getDateTime(string mode)
 {
     time_t rawtime;
     struct tm *timeinfo;
     char buf[100];
     time (&rawtime);
-    timeinfo = localtime(&rawtime);    
-    if (strftime(buf, sizeof(buf), "%F", timeinfo));
+    timeinfo = localtime(&rawtime);
+    if (mode == "start")
     {
-        date = buf;
+        if (strftime(buf, sizeof(buf), "%F", timeinfo));
+        {
+            date = buf;
+        }
+        if (strftime(buf, sizeof(buf), "%T", timeinfo));
+        {
+            start_time = buf;
+        }
+    }
+    else if (mode == "end")
+    {
+        if (strftime(buf, sizeof(buf), "%T", timeinfo));
+        {
+            end_time = buf;
+        }        
     }
 }
 
@@ -93,18 +110,35 @@ void MileageLogger::checkIfFileExists()
         file=fopen(path2store_logs.c_str(), "w+");
         ROS_INFO("Created file: [%s]", path2store_logs.c_str());
         fclose(file);
-        std::ofstream myfile;
-        myfile.open(path2store_logs.c_str());
+        fstream log_file;
+        log_file.open(path2store_logs.c_str());
         // write csv headers
-        myfile << "Date,Start Time,End Time, Test Location,Functionality Tested,Software Version,Kilometers Driven,Test Driven,Safety Observer,Mode\n";
-        myfile.close();
+        log_file << "Date,Start Time,End Time, Test Location,Functionality Tested,Software Version,Kilometers Driven,Test Driven,Safety Observer,Mode\n";
+        log_file << date << "," << start_time << "," << end_time << "," << test_location << "," << functionality << "," << software_version << ",";
+        log_file << distance_driven << "," << test_driver << "," << safety_observer << "," << current_mode << "\n";
+        log_file.close();
     }
 }
 
-void MileageLogger::writeToFile()
+void MileageLogger::writeToFile(string edit_mode)
 {
-    ROS_INFO("mode changed");
-    // ROS_INFO("Path is: [%s]", path2store_logs);
+    if (edit_mode == "append")
+    {
+        fstream log_file;
+        log_file.open(path2store_logs.c_str(), ios_base::app);
+        log_file << date << "," << start_time << "," << end_time << "," << test_location << "," << functionality << "," << software_version << ",";
+        log_file << distance_driven << "," << test_driver << "," << safety_observer << "," << current_mode << "\n";
+        log_file.close();
+        ROS_INFO("writing in append mode");
+    }
+    else if (edit_mode == "edit")
+    {
+        fstream log_file, log_file_updated;
+        log_file.open(path2store_logs, ios::in);
+        
+        log_file_updated.open()
+        ROS_INFO("writing in edit mode");
+    }
 }
 
 void MileageLogger::egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg)
@@ -114,14 +148,13 @@ void MileageLogger::egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& 
     distance_driven = distance_driven + distance;
     if (previous_mode != current_mode)
     {
-        writeToFile();
+        writeToFile("append");
         previous_mode = current_mode;
     }
-    else{
-        ROS_INFO("same mode");
-    }
-    
-    // ROS_INFO("Path is: [%s]", path2store_logs.c_str());
+    else
+    {
+        writeToFile("edit");
+    }    
 }
 
 void MileageLogger::swcStatusCb(const visteon_vehctrl_msgs::FsmStatus::ConstPtr& msg)
