@@ -2,10 +2,10 @@
 
 <launch>
     <!-- Novatel GPS -->
-    <include ns="novatel" file="$(find novatel_gps_driver)/launch/novatel.launch"/>
+    <include ns="/sy" file="$(find novatel_gps_driver)/launch/novatel.launch"/>
 
     <!-- Ego Motion -->
-    <include file="$(find visteon_mkz_black_bringup)/launch/pe/ego_fusion.launch">
+    <include ns="/pc" file="$(find visteon_mkz_black_bringup)/launch/pe/ego_fusion.launch">
         <arg name="ego_motion_type" value="novatel"/>
     </include>
 

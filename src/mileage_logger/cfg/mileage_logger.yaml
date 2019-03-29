@@ -1,8 +1,0 @@
-test_location: 'ACM'
-functionality: 'Integration Tests'
-software_version: '55'
-test_driver: 'James'
-safety_observer: 'Bond'
-sudo_password: 'ubuntu'
-stop_command: 'service mileage stop'
-start_command: 'service mileage start'
