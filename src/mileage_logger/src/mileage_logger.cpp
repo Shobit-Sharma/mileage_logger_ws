@@ -20,6 +20,7 @@ class MileageLogger
         void getHomeDir();
         void getDateTime(string mode);
         void checkIfFileExists();
+        void readCSV();
         void writeToFile(string edit_mode);
         void egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg);
         void swcStatusCb(const visteon_vehctrl_msgs::FsmStatus::ConstPtr& msg);
@@ -41,6 +42,8 @@ class MileageLogger
         float distance_driven;
         string current_mode;
         string previous_mode;
+        vector<vector<string> > parsedCsv;
+        int number_of_rows;
 };
 
 MileageLogger::MileageLogger(){};
@@ -51,14 +54,15 @@ void MileageLogger::start()
     // system always boots up in open loop
     current_mode = "open loop";
     previous_mode = "open loop";
+    number_of_rows = 0;
     getHomeDir();
-    getDateTime("start");
+    getDateTime("date");
     checkIfFileExists();
 }
 
 void MileageLogger::getHomeDir()
 {
-    // to-do: getenv not working with a system service, to be debugged.
+    // to-do: getenv("HOME") not working with a system service, to be debugged.
     // path2store_logs = getenv("HOME");
     // if (path2store_logs == "")
     // {
@@ -73,12 +77,15 @@ void MileageLogger::getDateTime(string mode)
     char buf[100];
     time (&rawtime);
     timeinfo = localtime(&rawtime);
-    if (mode == "start")
+    if (mode == "date")
     {
         if (strftime(buf, sizeof(buf), "%F", timeinfo));
         {
             date = buf;
         }
+    }
+    else if (mode == "start")
+    {
         if (strftime(buf, sizeof(buf), "%T", timeinfo));
         {
             start_time = buf;
@@ -107,6 +114,7 @@ void MileageLogger::checkIfFileExists()
     FILE *file;
     if (fopen(path2store_logs.c_str(),"r") == NULL)
     {
+        getDateTime("start");
         file=fopen(path2store_logs.c_str(), "w+");
         ROS_INFO("Created file: [%s]", path2store_logs.c_str());
         fclose(file);
@@ -118,6 +126,40 @@ void MileageLogger::checkIfFileExists()
         log_file << distance_driven << "," << test_driver << "," << safety_observer << "," << current_mode << "\n";
         log_file.close();
     }
+    // compare current values with existing ones to prevent overwrite
+    else
+    {
+        string mode_old;
+        readCSV();
+        // distance_driven_old = parsedCsv[number_of_rows-1][6];
+        mode_old = parsedCsv[number_of_rows-1][9];
+        if (mode_old == current_mode)
+        {
+            getDateTime("start");
+            writeToFile("append");
+        }
+        number_of_rows = 0;
+        parsedCsv.clear();
+    }
+}
+
+void MileageLogger::readCSV()
+{
+    fstream log_file(path2store_logs.c_str());
+    string line;
+    while(getline(log_file, line))
+    {
+        number_of_rows++;
+        stringstream lineStream(line);
+        string cell;
+        vector<string> parsedRow;
+        while(getline(lineStream,cell,','))
+        {
+            parsedRow.push_back(cell);
+        }
+        parsedCsv.push_back(parsedRow);
+    }
+    log_file.close();
 }
 
 void MileageLogger::writeToFile(string edit_mode)
@@ -125,34 +167,57 @@ void MileageLogger::writeToFile(string edit_mode)
     if (edit_mode == "append")
     {
         fstream log_file;
-        log_file.open(path2store_logs.c_str(), ios_base::app);
+        log_file.open(path2store_logs.c_str(), ios::app);
         log_file << date << "," << start_time << "," << end_time << "," << test_location << "," << functionality << "," << software_version << ",";
         log_file << distance_driven << "," << test_driver << "," << safety_observer << "," << current_mode << "\n";
         log_file.close();
-        ROS_INFO("writing in append mode");
     }
     else if (edit_mode == "edit")
     {
-        fstream log_file, log_file_updated;
-        log_file.open(path2store_logs, ios::in);
-        
-        log_file_updated.open()
-        ROS_INFO("writing in edit mode");
+        readCSV();
+        parsedCsv[number_of_rows-1][2] = end_time;
+        parsedCsv[number_of_rows-1][3] = test_location;
+        parsedCsv[number_of_rows-1][4] = functionality;
+        parsedCsv[number_of_rows-1][5] = software_version;
+        string temp = boost::lexical_cast<string>(distance_driven);
+        parsedCsv[number_of_rows-1][6] = temp;
+        parsedCsv[number_of_rows-1][7] = test_driver;
+        parsedCsv[number_of_rows-1][8] = safety_observer;
+        parsedCsv[number_of_rows-1][9] = current_mode;
+        fstream log_file;
+        log_file.open(path2store_logs.c_str(), ios::out);
+        for (int row=0; row<number_of_rows; row++)
+        {
+            for (int col = 0; col<10; col++)
+            {
+                log_file << parsedCsv[row][col] << ",";
+            }
+            log_file << "\n";
+        }
+        log_file.close();
+        number_of_rows = 0;
+        parsedCsv.clear();
     }
 }
+     
 
 void MileageLogger::egoMotionCb(const visteon_fusion_msgs::EgoFusion::ConstPtr& msg)
 {
     // calculate distance travelled in kilometers
+    // to-do: calculate time delta between two messages to get more accurate distance calulations
     float distance = msg->longitudinalVelocity * 3.6 * (0.02 / 3600);
     distance_driven = distance_driven + distance;
     if (previous_mode != current_mode)
     {
+        getDateTime("end");
+        start_time = end_time;
         writeToFile("append");
         previous_mode = current_mode;
+        distance_driven = 0.0;
     }
     else
     {
+        getDateTime("end");
         writeToFile("edit");
     }    
 }

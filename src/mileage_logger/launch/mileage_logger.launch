@@ -2,15 +2,12 @@
 
 <launch>
     <!-- Novatel GPS -->
-    <!--<include ns="novatel" file="$(find novatel_gps_driver)/launch/novatel.launch"/>-->
+    <include ns="novatel" file="$(find novatel_gps_driver)/launch/novatel.launch"/>
 
     <!-- Ego Motion -->
     <include file="$(find visteon_mkz_black_bringup)/launch/pe/ego_fusion.launch">
         <arg name="ego_motion_type" value="novatel"/>
     </include>
-
-    <!-- FSM -->
-    <!--<include file="$(find visteon_common_bringup)/launch/ex/fsm.launch"/>-->
 
     <!-- Mileage Logger -->
     <node ns="/sy/" name="mileage_logger_node" type="mileage_logger" pkg="mileage_logger" output="screen">
